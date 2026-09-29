@@ -50,7 +50,8 @@ class FlarumPoster(Star):
         self.reply_prompt = w.get("reply_prompt") or (
             "你是论坛用户「吉小将」。请根据下面的帖子标题、帖子上下文（最近回复）、"
             "最新回复和联网搜索结果，生成一条自然、得体的中文回复（Markdown）。"
-            "若搜索结果相关则引用，否则基于帖子内容回复。只输出回复正文，不要输出多余解释。\n\n"
+            "若搜索结果相关则引用，否则基于帖子内容回复。只输出回复正文，不要输出多余解释；"
+            "不要以 @ 提及开头（系统会自动添加对被回复人的提及）。\n\n"
             "【帖子标题】{title}\n【帖子上下文】\n{context}\n【最新回复】{content}\n【联网搜索结果】{search}"
         )
         self.context_post_count = max(int(w.get("context_post_count") or 15), 1)
@@ -266,7 +267,8 @@ class FlarumPoster(Star):
                 if not self._should_reply(author_id, raw):
                     continue
                 logger.info(f"[flarum] 检测到需回复: did={did}, 作者={p_author}")
-                await self._reply_to_post(did, title, self._strip_html(raw), context)
+                p_name = user_names.get(p_author) or (f"用户{p_author}" if p_author else "")
+                await self._reply_to_post(did, title, self._strip_html(raw), context, p_author, p_name)
             state[did] = last_num
 
         await self.put_kv_data("watch_state", state)
@@ -297,7 +299,7 @@ class FlarumPoster(Star):
                 return True
         return discussion_author_id == self.user_id
 
-    async def _reply_to_post(self, did: str, title: str, content: str, context: str) -> None:
+    async def _reply_to_post(self, did: str, title: str, content: str, context: str, reply_to_id: str, reply_to_name: str) -> None:
         search_text = "（未启用搜索）"
         if self.reply_search_enabled and self.tavily_key:
             try:
@@ -313,10 +315,21 @@ class FlarumPoster(Star):
             .replace("{search}", search_text)
         )
         raw = await self._llm_generate(prompt)
-        reply = (raw or "").strip()
+        reply = self._strip_leading_mentions(raw or "")
         if not reply:
             return
-        await self._post_reply(did, reply)
+        mention = f'@"{reply_to_name}"#{reply_to_id}'
+        await self._post_reply(did, f"{mention} {reply}")
+
+    @staticmethod
+    def _strip_leading_mentions(text: str) -> str:
+        text = (text or "").strip()
+        while True:
+            new = re.sub(r'^@["“]((?!"#[a-z]{0,3}[0-9]+).)+["”]#[0-9]+\s*', "", text)
+            new = re.sub(r'^@[A-Za-z0-9_-]+\s*', "", new)
+            if new == text:
+                return text.strip()
+            text = new
 
     @staticmethod
     def _fmt_search(sr) -> str:
