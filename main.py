@@ -48,11 +48,14 @@ class FlarumPoster(Star):
         self.watch_interval = max(int(w.get("watch_interval") or 10), 1)
         self.reply_search_enabled = self._as_bool(w.get("reply_search_enabled", True))
         self.reply_prompt = w.get("reply_prompt") or (
-            "你是论坛用户「吉小将」。请根据下面的帖子内容和联网搜索结果，"
-            "生成一条自然、得体的中文回复（Markdown）。若搜索结果相关则引用，"
-            "否则直接基于帖子内容回复。只输出回复正文，不要输出多余解释。\n\n"
-            "【帖子标题】{title}\n【帖子内容】{content}\n【联网搜索结果】{search}"
+            "你是论坛用户「吉小将」。请根据下面的帖子标题、帖子上下文（最近回复）、"
+            "最新回复和联网搜索结果，生成一条自然、得体的中文回复（Markdown）。"
+            "若搜索结果相关则引用，否则基于帖子内容回复。只输出回复正文，不要输出多余解释。\n\n"
+            "【帖子标题】{title}\n【帖子上下文】\n{context}\n【最新回复】{content}\n【联网搜索结果】{search}"
         )
+        self.context_post_count = max(int(w.get("context_post_count") or 15), 1)
+        self.context_post_chars = max(int(w.get("context_post_chars") or 300), 50)
+        self.context_total_chars = max(int(w.get("context_total_chars") or 3000), 500)
         self.tavily_key = w.get("tavily_key") or ""
         self.mention_names = ["jixiaojiang", "吉小将"]
 
@@ -250,7 +253,8 @@ class FlarumPoster(Star):
             if last_num <= prev:
                 continue
 
-            posts = await self._get_discussion_posts(did)
+            posts, user_names = await self._get_discussion_posts(did)
+            context = self._build_context(posts, user_names)
             for p in posts:
                 num = int(p.get("attributes", {}).get("number") or 0)
                 if num <= prev:
@@ -262,10 +266,26 @@ class FlarumPoster(Star):
                 if not self._should_reply(author_id, raw):
                     continue
                 logger.info(f"[flarum] 检测到需回复: did={did}, 作者={p_author}")
-                await self._reply_to_post(did, title, self._strip_html(raw))
+                await self._reply_to_post(did, title, self._strip_html(raw), context)
             state[did] = last_num
 
         await self.put_kv_data("watch_state", state)
+
+    def _build_context(self, posts: list, user_names: dict) -> str:
+        sorted_posts = sorted(posts, key=lambda p: int(p.get("attributes", {}).get("number") or 0))
+        recent = sorted_posts[-self.context_post_count:]
+        lines = []
+        total = 0
+        for p in recent:
+            author_id = str(p.get("relationships", {}).get("user", {}).get("data", {}).get("id", ""))
+            name = user_names.get(author_id) or (f"用户{author_id}" if author_id else "未知")
+            text = self._strip_html(p.get("attributes", {}).get("contentHtml") or p.get("attributes", {}).get("content") or "")
+            line = f"- {name}：{text[:self.context_post_chars]}"
+            lines.append(line)
+            total += len(line)
+        while lines and total > self.context_total_chars:
+            total -= len(lines.pop(0))
+        return "\n".join(lines) or "（无）"
 
     @staticmethod
     def _strip_html(s: str) -> str:
@@ -277,7 +297,7 @@ class FlarumPoster(Star):
                 return True
         return discussion_author_id == self.user_id
 
-    async def _reply_to_post(self, did: str, title: str, content: str) -> None:
+    async def _reply_to_post(self, did: str, title: str, content: str, context: str) -> None:
         search_text = "（未启用搜索）"
         if self.reply_search_enabled and self.tavily_key:
             try:
@@ -288,6 +308,7 @@ class FlarumPoster(Star):
                 logger.error(f"[flarum] Tavily 搜索异常: {e}")
         prompt = (
             self.reply_prompt.replace("{title}", title)
+            .replace("{context}", context)
             .replace("{content}", content[:2000])
             .replace("{search}", search_text)
         )
@@ -356,13 +377,23 @@ class FlarumPoster(Star):
             )
         return (resp.json().get("data") or []) if resp.status_code == 200 else []
 
-    async def _get_discussion_posts(self, did: str) -> list:
+    async def _get_discussion_posts(self, did: str):
         async with httpx.AsyncClient(timeout=30) as c:
             resp = await c.get(
                 f"{self.base_url}/api/posts",
-                params={"filter[discussion]": did, "page[limit]": 20},
+                params={"filter[discussion]": did, "page[limit]": 20, "include": "user"},
             )
-        return (resp.json().get("data") or []) if resp.status_code == 200 else []
+        if resp.status_code != 200:
+            return [], {}
+        data = resp.json()
+        posts = data.get("data") or []
+        user_names = {}
+        for inc in data.get("included") or []:
+            if inc.get("type") == "users":
+                uid = str(inc.get("id"))
+                attrs = inc.get("attributes", {})
+                user_names[uid] = attrs.get("displayName") or attrs.get("username") or uid
+        return posts, user_names
 
     # ---------- ymgal ----------
 

@@ -82,9 +82,24 @@
         "default": true
       },
       "reply_prompt": {
-        "description": "回帖提示词（含 {title} {content} {search} 占位符）",
+        "description": "回帖提示词（含 {title} {context} {content} {search} 占位符）",
         "type": "text",
         "default": ""
+      },
+      "context_post_count": {
+        "description": "回帖时喂给 LLM 的最近回复条数",
+        "type": "text",
+        "default": "15"
+      },
+      "context_post_chars": {
+        "description": "上下文中每条回复截断字数",
+        "type": "text",
+        "default": "300"
+      },
+      "context_total_chars": {
+        "description": "上下文总长度上限（字符）",
+        "type": "text",
+        "default": "3000"
       },
       "tavily_key": {
         "description": "Tavily API Key",
