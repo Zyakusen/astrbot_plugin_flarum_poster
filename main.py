@@ -37,8 +37,9 @@ class FlarumPoster(Star):
         self.schedule_weekday = int(s.get("schedule_weekday") or 0)
         self.summary_prompt = s.get("summary_prompt") or (
             "你是一个 Galgame 资讯编辑。请根据下面提供的「最新资讯」和「本月新作」，"
-            "总结成一篇中文 Galgame 资讯摘要帖。要求：第一行用 # 开头输出标题，"
-            "之后用 Markdown 输出正文，简洁、突出重点，可适当保留原文链接。\n\n"
+            "总结成一篇中文 Galgame 资讯摘要帖。要求：第一行用 # 开头输出标题；"
+            "正文使用 Markdown，但不要使用表格语法（竖线 | 分隔），一律用无序列表（- ）"
+            "或有序列表代替；不要输出 HTML 标签；简洁、突出重点，可适当保留原文链接。\n\n"
             "【最新资讯】\n{news}\n\n【本月新作】\n{releases}"
         )
 
