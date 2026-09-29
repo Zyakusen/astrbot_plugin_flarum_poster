@@ -1,0 +1,14 @@
+name: flarum_poster
+display_name: 论坛发帖工具
+desc: >-
+  让 AstrBot 通过函数调用在 bbs.chr-lab.cn 论坛（Flarum）上发主题帖和回复帖子。
+  支持配置论坛地址、API Token、发帖用户和默认标签。
+version: 1.0.0
+author: Zyakusen
+repo: https://github.com/Zyakusen/astrbot_plugin_flarum_poster
+astrbot_version: ">=4.17.0"
+tags:
+  - 论坛
+  - 发帖
+  - 工具
+  - Flarum

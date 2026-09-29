@@ -1,0 +1,96 @@
+{
+  "forum": {
+    "description": "论坛设置",
+    "type": "object",
+    "hint": "配置 Flarum 论坛地址与发帖凭据",
+    "items": {
+      "base_url": {
+        "description": "论坛地址",
+        "type": "text",
+        "hint": "不带末尾斜杠",
+        "default": "https://bbs.chr-lab.cn"
+      },
+      "api_token": {
+        "description": "Flarum API Token",
+        "type": "text",
+        "hint": "从 flarum_api_keys 表生成，用于 Authorization 头",
+        "default": ""
+      },
+      "user_id": {
+        "description": "发帖用户 ID",
+        "type": "text",
+        "hint": "jixiaojiang 的论坛用户 id",
+        "default": "8"
+      },
+      "default_tag": {
+        "description": "默认标签 ID",
+        "type": "text",
+        "hint": "4=日常 2=技术 3=娱乐 1=公告",
+        "default": "4"
+      },
+      "chat_provider_id": {
+        "description": "LLM Provider ID",
+        "type": "text",
+        "hint": "用于生成摘要与回复的模型",
+        "default": "deepseek/deepseek-v4-flash-vision-exp"
+      }
+    }
+  },
+  "schedule": {
+    "description": "定时发帖（每周 Galgame 资讯）",
+    "type": "object",
+    "items": {
+      "schedule_enabled": {
+        "description": "启用定时发帖",
+        "type": "bool",
+        "default": true
+      },
+      "schedule_time": {
+        "description": "发帖时间 HH:MM",
+        "type": "text",
+        "default": "09:00"
+      },
+      "schedule_weekday": {
+        "description": "星期几（0=周一 ... 6=周日）",
+        "type": "text",
+        "default": "0"
+      },
+      "summary_prompt": {
+        "description": "资讯总结提示词（含 {news} {releases} 占位符）",
+        "type": "text",
+        "default": ""
+      }
+    }
+  },
+  "watch": {
+    "description": "监听回帖（@吉小将 或 自己帖子被回复）",
+    "type": "object",
+    "items": {
+      "watch_enabled": {
+        "description": "启用监听回帖",
+        "type": "bool",
+        "default": true
+      },
+      "watch_interval": {
+        "description": "轮询间隔（分钟）",
+        "type": "text",
+        "default": "10"
+      },
+      "reply_search_enabled": {
+        "description": "回帖前联网搜索",
+        "type": "bool",
+        "default": true
+      },
+      "reply_prompt": {
+        "description": "回帖提示词（含 {title} {content} {search} 占位符）",
+        "type": "text",
+        "default": ""
+      },
+      "tavily_key": {
+        "description": "Tavily API Key",
+        "type": "text",
+        "default": ""
+      }
+    }
+  }
+}
