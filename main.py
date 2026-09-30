@@ -58,7 +58,8 @@ class FlarumPoster(Star):
         self.context_post_chars = max(int(w.get("context_post_chars") or 300), 50)
         self.context_total_chars = max(int(w.get("context_total_chars") or 3000), 500)
         self.tavily_key = w.get("tavily_key") or ""
-        self.mention_names = ["jixiaojiang", "吉小将"]
+        self.bot_username = "jixiaojiang"
+        self.bot_display_name = "吉小将"
 
         self._tasks: list[asyncio.Task] = []
         self._ymgal_access_token: str | None = None
@@ -243,8 +244,6 @@ class FlarumPoster(Star):
             did = str(d.get("id"))
             attr = d.get("attributes", {})
             last_num = int(attr.get("lastPostNumber") or 0)
-            rel = d.get("relationships", {})
-            author_id = str(rel.get("user", {}).get("data", {}).get("id", ""))
             title = attr.get("title", "")
             prev = int(state.get(did, 0))
 
@@ -264,7 +263,7 @@ class FlarumPoster(Star):
                 if p_author == self.user_id:
                     continue
                 raw = (p.get("attributes", {}).get("contentHtml") or p.get("attributes", {}).get("content") or "")
-                if not self._should_reply(author_id, raw):
+                if not self._should_reply(raw):
                     continue
                 logger.info(f"[flarum] 检测到需回复: did={did}, 作者={p_author}")
                 p_name = user_names.get(p_author) or (f"用户{p_author}" if p_author else "")
@@ -293,11 +292,19 @@ class FlarumPoster(Star):
     def _strip_html(s: str) -> str:
         return re.sub(r"<[^>]+>", " ", s or "").strip()
 
-    def _should_reply(self, discussion_author_id: str, post_content: str) -> bool:
-        for name in self.mention_names:
-            if name in post_content:
+    def _should_reply(self, post_html: str) -> bool:
+        # USERMENTION：真正的 @吉小将（href 指向 /u/jixiaojiang）
+        for m in re.finditer(r'<a\b[^>]*class="UserMention"[^>]*>', post_html):
+            tag = m.group(0)
+            href = re.search(r'href="([^"]*)"', tag)
+            if href and f"/u/{self.bot_username}" in href.group(1):
                 return True
-        return discussion_author_id == self.user_id
+        # POSTMENTION：直接回复吉小将的楼层（引用块内带他的显示名）
+        for m in re.finditer(r'<a\b[^>]*class="PostMention"[^>]*>(.*?)</a>', post_html, re.S):
+            text = re.sub(r'<[^>]+>', '', m.group(1))
+            if self.bot_display_name in text:
+                return True
+        return False
 
     async def _reply_to_post(self, did: str, title: str, content: str, context: str, reply_to_id: str, reply_to_name: str) -> None:
         search_text = "（未启用搜索）"
@@ -394,7 +401,7 @@ class FlarumPoster(Star):
         async with httpx.AsyncClient(timeout=30) as c:
             resp = await c.get(
                 f"{self.base_url}/api/posts",
-                params={"filter[discussion]": did, "page[limit]": 20, "include": "user"},
+                params={"filter[discussion]": did, "page[limit]": 20, "include": "user", "sort": "-number"},
             )
         if resp.status_code != 200:
             return [], {}
